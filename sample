@@ -1,0 +1,841 @@
+"""
+使用python实现以下功能，随机生成100个工件Job，随机生成10个机器M1，生成1个机器人，
+每一个工件随机在1～10台机器内任意几台中加工，加工的过程是需要机器人从初仓库搬运到机
+器上加工，加工完成之后需要机器人从机器上卸载下来放到另外的机器上加工，或者搬运到结束仓库。
+工件job在机器M上加工时间需要你随机生成，加工时间范围是0～10s，
+返回一个列表，其中的元素是job工件在哪些机器上加工并且加工时间是多少
+"""
+
+
+#机器序乱序
+# import random
+#
+# # 随机生成工件数量和机器数量
+# num_jobs = 100
+# num_machines = 10
+#
+# # 随机生成每个工件在哪些机器上加工以及加工时间
+# jobs = []
+# for i in range(num_jobs):
+#     # 随机生成工件在哪些机器上加工
+#     machines = random.sample(range(1, num_machines + 1), random.randint(1, num_machines))
+#     # 随机生成工件在每个机器上的加工时间
+#     processing_times = {}
+#     for machine in machines:
+#         processing_times[machine] = random.randint(0, 10)
+#     jobs.append({'Job': f'Job{i+1}', 'Machines': machines, 'Processing Times': processing_times})
+#
+# # 随机生成机器人初始位置
+# robot_init_position = random.randint(1, num_machines)
+#
+# # 输出工件的加工信息
+# for job in jobs:
+#     print(f"Job: {job['Job']}")
+#     print(f"Machines: {job['Machines']}")
+#     print(f"Processing Times: {job['Processing Times']}")
+#     print()
+#
+# # 输出机器人初始位置
+# print(f"Robot Initial Position: M{robot_init_position}")
+
+
+#机器序是升序
+# import random
+# # 随机生成工件数量和机器数量
+# num_jobs = 100
+# num_machines = 10
+#
+# # 随机生成每个工件在哪些机器上加工以及加工时间
+# jobs = []
+# for i in range(num_jobs):
+#     # 随机生成工件在哪些机器上加工
+#     machines = sorted(random.sample(range(1, num_machines + 1), random.randint(1, num_machines)))
+#     # 随机生成工件在每个机器上的加工时间
+#     processing_times = {}
+#     for machine in machines:
+#         processing_times[machine] = random.randint(0, 10)
+#     jobs.append({'Job': f'Job{i+1}', 'Machines': machines, 'Processing Times': processing_times})
+#
+# # 随机生成机器人初始位置
+# robot_init_position = random.randint(1, num_machines)
+#
+# # 输出工件的加工信息
+# for job in jobs:
+#     print(f"Job: {job['Job']}")
+#     print(f"Machines: {job['Machines']}")
+#     print(f"Processing Times: {job['Processing Times']}")
+#     print()
+#
+# # 输出机器人初始位置
+# print(f"Robot Initial Position: M{robot_init_position}")
+#
+
+
+
+#以下代码是进行了格式化输出
+import copy
+import itertools
+import random
+import time
+from queue import Queue
+start_time = time.time()
+def partial_sort_by_index(arr, indexes):
+    """
+    根据指定的索引部分排序集合 arr
+
+    参数：
+    - arr: list，待排序的集合
+    - indexes: list，指定的索引列表
+
+    返回：
+    - list，排序后的集合
+    """
+    # 根据索引列表获取对应的元素，并保存在一个新的列表中
+    subset = [arr[i] for i in indexes]
+
+    # 对子集进行排序
+    subset.sort()
+
+    # 将排序后的子集按照原索引位置更新到原集合中
+    for i, index in enumerate(indexes):
+        arr[index] = subset[i]
+
+    return arr
+#检测变迁死锁的函数
+def deadlock_detection(sorted_tem,jobs,status):
+    flag = 0
+    #tem_status = status.copy()
+    #print(sorted_tem,"sorted_tem")
+    #sorted_tem = [[1,2],[3,4]]
+    sorted_tem_len = len(sorted_tem)
+    for trs in range(0,sorted_tem_len):
+        for job in jobs:
+            if sorted_tem[trs] in job[4]:
+                #判断trs在变迁中的第几个位置
+                trs_index = job[4].index(sorted_tem[trs])
+                #print(trs_index,"trs_index")
+                #如果是第一个变迁，更新状态矩阵
+                if trs_index == 0:
+                    machine_index = job[2][trs_index]
+                    #print("machine_index",machine_index)
+                    status[machine_index-1] = status[machine_index-1] -1
+                    #print("更新后的状态矩阵1",status)
+                    #判断是否会产生死锁
+                    #只要对应的状态矩阵中有一个为-1，就会产生死锁
+                    if status[machine_index-1] < 0:
+                        #print("产生死锁")#进行死锁
+                        status[machine_index - 1] = status[machine_index - 1] + 1
+                        flag = 1
+                        #return trs
+
+                elif trs_index == len(job[4])-1: #如果是最后一个索引
+                    machine_index = job[2][trs_index-1]
+                    status[machine_index - 1] = status[machine_index - 1] + 1
+                    #print("更新后的状态矩阵2", status)
+                else:
+                    machine_index = job[2][trs_index]
+                    front_trs_index = trs_index - 1
+                    front_machine_index = job[2][front_trs_index]
+                    status[front_machine_index - 1] = status[front_machine_index - 1] + 1
+                    status[machine_index - 1] = status[machine_index - 1] - 1
+                    #print("更新后的状态矩阵3", status)
+                    # 只要对应的状态矩阵中有一个为-1，就会产生死锁
+                    if status[machine_index - 1] < 0:
+                        #print("产生死锁")
+                        status[front_machine_index - 1] = status[front_machine_index - 1] - 1
+                        status[machine_index - 1] = status[machine_index - 1] + 1
+                        flag = 1
+                        #return trs，原来的设计是返回发生死锁的位置
+                    # 判断是否会产生死锁
+    return [flag,status]
+
+
+def deadlock_detection_fix(sorted_tem,jobs,status):
+    flag = 0
+    #tem_status = status.copy()
+    #print(sorted_tem,"sorted_tem")
+    #sorted_tem = [[1,2],[3,4]]
+    sorted_tem_len = len(sorted_tem)
+    for trs in range(0,sorted_tem_len):
+        for job in jobs:
+            if sorted_tem[trs] in job[4]:
+                #判断trs在变迁中的第几个位置
+                trs_index = job[4].index(sorted_tem[trs])
+                #print(trs_index,"trs_index")
+                #如果是第一个变迁，更新状态矩阵
+                if trs_index == 0:
+                    machine_index = job[2][trs_index]
+                    #print("machine_index",machine_index)
+                    status[machine_index-1] = status[machine_index-1] - 1
+                    #print("更新后的状态矩阵1",status)
+                    #判断是否会产生死锁
+                    #只要对应的状态矩阵中有一个为-1，就会产生死锁
+                    if status[machine_index-1] < 0:
+                        #print("产生死锁")#进行死锁
+                        status[machine_index - 1] = status[machine_index - 1] + 1
+                        flag = 1
+                        #return trs
+
+                elif trs_index == len(job[4])-1: #如果是最后一个索引
+                    machine_index = job[2][trs_index-1]
+                    status[machine_index - 1] = status[machine_index - 1] + 1
+                    #print("更新后的状态矩阵2", status)
+                else:
+                    machine_index = job[2][trs_index]
+                    front_trs_index = trs_index - 1
+                    front_machine_index = job[2][front_trs_index]
+                    status[front_machine_index - 1] = status[front_machine_index - 1] + 1
+                    status[machine_index - 1] = status[machine_index - 1] - 1
+                    #print("更新后的状态矩阵3", status)
+                    # 只要对应的状态矩阵中有一个为-1，就会产生死锁
+                    if status[machine_index - 1] < 0:
+                        #print("产生死锁")
+                        status[front_machine_index - 1] = status[front_machine_index - 1] - 1
+                        status[machine_index - 1] = status[machine_index - 1] + 1
+                        flag = 1
+                        #return trs，原来的设计是返回发生死锁的位置
+                    # 判断是否会产生死锁
+    return flag
+#死锁恢复函数
+def deadlock_equal(sorted_A,non_sorted_A,taboo_list,jobs,delet_list):
+    equal_ele = non_sorted_A[-1]
+    non_sorted_A.pop()
+    #print(delet_list,'delet_list')
+    #input()
+    sorted_A.insert(delet_list[-1],equal_ele)
+    delet_list.pop()
+    #print(sorted_A,'sorted_A_in_equal')
+    for job in jobs:
+        if equal_ele in job[4]:
+            # 判断trs在变迁中的第几个位置
+            tra_index = job[4].index(equal_ele)
+            for i in range(tra_index, len(job[4])):
+                taboo_list.append(job[4][i])
+                #print(taboo_list, 'taboo_list_in_deadlock_equal')
+    return taboo_list
+def deadlock_s(sorted_A,non_sorted_A, jobs,status):
+    j = 0
+    taboo_list_s = []
+    if len(sorted_A) == 1:
+        return 1
+    while sorted_A != []:
+        if j == len(sorted_A):
+            return 0
+        else:
+            tra = sorted_A[j]
+            if tra in taboo_list_s or non_sorted_A[-1] == tra:
+                j = j + 1
+            else:
+                for job in jobs:
+                    if tra in job[4]:
+                        tra_index = job[4].index(tra)
+                        if tra_index == 0:
+                            machine_index = job[2][tra_index]
+                            status[machine_index - 1] = status[machine_index - 1] - 1
+                            if status[machine_index - 1] < 0:
+                                status[machine_index - 1] = status[machine_index - 1] + 1
+                                for i in range(tra_index, len(job[4])):
+                                    taboo_list_s.append(job[4][i])
+                                j = j + 1
+                            else:
+                                return 1
+                        elif tra_index == len(job[4])-1:
+                            return 1
+                        else:
+                            machine_index = job[2][tra_index]
+                            front_trs_index = tra_index - 1
+                            front_machine_index = job[2][front_trs_index]
+                            status[front_machine_index - 1] = status[front_machine_index - 1] + 1
+                            status[machine_index - 1] = status[machine_index - 1] - 1
+                            if status[machine_index - 1] < 0:
+                                # print("产生死锁")
+                                status[front_machine_index - 1] = status[front_machine_index - 1] - 1
+                                status[machine_index - 1] = status[machine_index - 1] + 1
+                                for i in range(tra_index, len(job[4])):
+                                    taboo_list_s.append(job[4][i])
+                                j = j + 1
+                            else:
+                                return 1
+
+def Currently_available_transitions(jobs,tra,status_job,num_jobs):
+    for job in jobs:
+        if tra in job[4]:
+            tra_index = job[4].index(tra)
+            tra_job_num = job[0]
+            #print(tra_job_num,'tra_job_num')
+    tra_lst = []
+    if tra_index != len(job[4]) - 1:
+        tra_lst.append([tra[0]+2,tra[1]+2])
+    for num in range(0,num_jobs):
+        if num == tra_job_num - 1:
+            continue
+        else:
+            if status_job[num] + 1 <= len(jobs[num][4]) - 1:
+                #print(status_job[num] + 1,'status_job[num] + 1')
+                tra_lst.append(jobs[num][4][status_job[num] + 1])
+    return tra_lst
+
+class Node:
+    def __init__(self, value,children,level,status):
+        self.value = value
+        self.children = children
+        self.level = level
+        self.status = status
+        self.ID = 0
+def find_job_num(jobs,tra):
+    for job in jobs:
+        if tra in job[4]:
+            tra_index = job[4].index(tra)
+            if tra_index == len(job[4]) - 1:
+                return [tra_index,job[2][tra_index-1]]
+            elif tra_index == 0:
+                return [tra_index,job[2][tra_index]]
+            else:
+                return [tra_index,job[2][tra_index-1],job[2][tra_index]]
+
+
+
+def deadlock_serity(jobs,num_machines,tra,trl_two,tra_CAT):
+    queue = Queue()
+    root = Node(tra,tra_CAT,1,trl_two)
+    queue.put(root)
+    #print(trl_two,'trl_two')
+    while not queue.empty():
+        node = queue.get()
+        # print('第', TRC, '轮出队操作完成，出队元素是',node.value,'出队元素的层数是',node.level)
+        # TRC = TRC + 1
+        # print(node.children,'node.children')
+        # print(node.status,'node.status')
+        for tra_i in node.children:
+            for job in jobs:
+                if tra_i in job[4]:
+                    # 判断trs在变迁中的第几个位置
+                    tra_index = job[4].index(tra_i)
+                    #print(tra_index,'tra_index_tra_i')
+                    if tra_index == len(job[4]) - 1: #如果是当前工件变迁中的最后一个变迁，不用判断直接加入即可
+                        temp_t = node.children.copy()
+                        temp_t.remove(tra_i)
+                        #在这里进行了复制操作
+                        node_chilren_children = temp_t.copy()
+                        #print(node_chilren_children,'node_chilren_children')
+                        node_chilren_level = node.level + 1
+                        if node_chilren_level == num_machines + 1:
+                            return 1
+                        temp_status = node.status.copy()
+                        temp_status[job[2][tra_index-1] - 1 ] += 1
+                        # 在这里进行了复制操作
+                        node_status_chilren = temp_status.copy()
+                        #print(node_chilren_children, 'node_chilren_children')
+                        node_chilren = Node(tra_i,node_chilren_children,node_chilren_level,node_status_chilren)
+
+                        queue.put(node_chilren)
+                    elif tra_index == 0:
+                        temp_status = node.status.copy()
+                        #print(temp_status,'tra_index == 0 temp_status')
+                        #print(temp_status[job[2][tra_index]-1] - 1,'temp_status[job[2][tra_index]-1] - 1')
+                        if temp_status[job[2][tra_index]-1] - 1 >= 0:
+                            temp_status[job[2][tra_index] - 1] = temp_status[job[2][tra_index] - 1] - 1
+                            node_chilren_children_set = []
+                            node_chilren_children_set.append([tra_i[0] + 2,tra_i[1] + 2])
+                            temp_t = node.children.copy()
+                            temp_t.remove(tra_i)
+                            node_chilren_children_set = node_chilren_children_set + temp_t
+                            node_chilren_level = node.level + 1
+                            if node_chilren_level == num_machines + 1:
+                                return 1
+                            node_status_chilren = temp_status
+                            #print(node_chilren_children_set, 'node_chilren_children_set')
+                            node_chilren = Node(tra_i, node_chilren_children_set, node_chilren_level, node_status_chilren)
+
+                            queue.put(node_chilren)
+
+                    else:
+                        temp_status = node.status.copy()
+                        #print(temp_status[job[2][tra_index] - 1] - 1,'temp_status[job[2][tra_index] - 1] - 1')
+                        if temp_status[job[2][tra_index] - 1] - 1 >= 0:
+                            node_chilren_level = node.level + 1
+                            if node_chilren_level == num_machines + 1 :
+                                return 1
+                            temp_status[job[2][tra_index] - 1] = temp_status[job[2][tra_index] - 1] - 1
+                            temp_status[job[2][tra_index-1] - 1] = temp_status[job[2][tra_index-1] - 1] + 1
+                            # 在这里进行了复制操作
+                            node_status_chilren = temp_status.copy()
+                            node_chilren_children_set = []
+                            node_chilren_children_set.append([tra_i[0] + 2, tra_i[1] + 2])
+                            temp_t = node.children.copy()
+                            temp_t.remove(tra_i)
+                            node_chilren_children_set = node_chilren_children_set + temp_t
+                            node_chilren = Node(tra_i, node_chilren_children_set, node_chilren_level,
+                                                node_status_chilren)
+
+                            queue.put(node_chilren)
+
+    return 0
+
+def deadlock_recovery(sorted_A,jobs,num_machines,status_job,length):
+    #delet_list = []
+    tem_sorted_A = sorted_A.copy()
+    non_sorted_A = []
+    taboo_list = []
+    j = 0
+    tem_s = 1
+    while sorted_A != []:
+        # print('sorted_a的长度=',len(sorted_A))
+        # print('j=',j)
+        if j == len(sorted_A):
+            print(taboo_list, 'taboo_list')
+            print(non_sorted_A, len(non_sorted_A), 'non_sorted_A')
+            print(sorted_A, 'sorted_A')
+            print(status, 'status_j = sorted_A')
+            if len(taboo_list) == length:
+                tem_s = 0
+                non_sorted_A = non_sorted_A + taboo_list
+            break
+
+        else:
+            tra = sorted_A[j]
+            #print(tra,'tra ',status,'status')
+            if tra in taboo_list:
+                j = j + 1
+            else:
+                non_sorted_A.append(tra)
+                status = [1] * (num_machines)
+                # print(status,'status')
+                trl = deadlock_detection(non_sorted_A, jobs, status)
+                # print(trl,'trl')
+                #检测是否是安全的
+                #写入函数trl_s = deadlock_s()
+                if trl[0] == 1:
+                    non_sorted_A.remove(tra)
+                    #print(non_sorted_A,'non_sorted_A')
+                    for job in jobs:
+                        if tra in job[4]:
+                            # 判断trs在变迁中的第几个位置
+                            tra_index = job[4].index(tra)
+                            for i in range(tra_index, len(job[4])):
+                                taboo_list.append(job[4][i])
+                                #print(taboo_list, '禁忌表')
+                    j = j + 1
+                else:
+                    #trl_s = deadlock_s(sorted_A, non_sorted_A, jobs, trl[1]) #if 这里判断是不是安全的，如果是安全的继续下去，如果不安全执行不安全程序
+                    #print(trl_s, 'trl_s')
+                    #input('任意')
+                    tra_CAT = Currently_available_transitions(jobs,tra,status_job,num_jobs)
+
+                    print(tra_CAT,tra,'tra对应的后续变迁')
+                    trl_CAT = deadlock_serity(jobs,length, tra, trl[1], tra_CAT)
+
+                    if trl_CAT == 1:
+                        print(tra,trl[1],tra_CAT,'tra, trl[1], tra_CAT')
+                    #     if trl_CAT == 1:
+                    #         print(trl_i,'trl_i',tra,'tra')
+                    #         break
+
+                    #print(trl_CAT,'trl_CAT')
+                    if trl_CAT == 0: #print(print(trl[0], 'trl[0]'))要判断安全位
+                        non_sorted_A.remove(tra)
+                        # print(non_sorted_A,'non_sorted_A')
+                        for job in jobs:
+                            if tra in job[4]:
+                                # 判断trs在变迁中的第几个位置
+                                tra_index = job[4].index(tra)
+                                for i in range(tra_index, len(job[4])):
+                                    taboo_list.append(job[4][i])
+                                    # print(taboo_list, '禁忌表')
+                        j = j + 1
+                    else:
+                        sorted_A.remove(tra)
+                        for job in jobs:
+                            if tra in job[4]:
+                                tra_index = job[4].index(tra)
+                                status_job[job[0]-1] = tra_index # 统计了工件工序的进度如何,安全调度以后，更新status_job的工序状态
+                        print(status_job,'status_job')
+                        j = 0
+                            #print(sorted_A, 'sorted_A_in_roc')
+                            #print(non_sorted_A,'non_sorted_A_in_roc')
+                        taboo_list = []
+
+    return (non_sorted_A,tem_s)
+
+
+#求解Cmax函数
+def Cmax(jobs,non_sorted_A):
+    non_sorted_A_length = len(non_sorted_A)
+    time_list = [0]*non_sorted_A_length
+    for i in range(non_sorted_A_length):
+        if i == 0:
+            for job in jobs:
+                if non_sorted_A[i] in job[4]:
+                    tra_index = job[4].index(non_sorted_A[i])
+                    tra_machine = job[2][tra_index]
+                    tra_time = job[3][tra_index][1]
+                    #print(tra_machine,tra_time)
+                    time_list[i] = tra_time + 1  #0.1是机器人移动时间
+        elif i == non_sorted_A_length - 1:
+            time_list[i] = time_list[i - 1] + 1 #0.1是机器人移动时间
+        else:
+            for job in jobs:
+                if non_sorted_A[i] in job[4]:
+                    tra_index = job[4].index(non_sorted_A[i]) #变迁在变迁序列中的索引
+                    if tra_index == 0:
+                        tra_time = job[3][tra_index][1]
+                        time_list[i] = time_list[i - 1] + tra_time + 1 #0.1是机器人移动时间
+                    elif tra_index == len(job[4]) - 1:
+                        front_trs_index = tra_index - 1
+                        front_trs = job[4][front_trs_index]
+                        if front_trs in non_sorted_A:
+                            front_trs_index = non_sorted_A.index(front_trs)
+                            time_list[i] = max(time_list[i - 1],time_list[front_trs_index]) + 1#0.1是机器人移动时间
+                    else:
+                        front_trs_index = tra_index - 1
+                        front_trs = job[4][front_trs_index]
+                        if front_trs in non_sorted_A:
+                            front_trs_index = non_sorted_A.index(front_trs)
+                            tra_time = job[3][tra_index][1]
+                            time_list[i] = max(time_list[i - 1], time_list[front_trs_index])+ tra_time+ 1#0.1是机器人移动时间
+    print(time_list,'time_list')
+    return time_list
+#机器人在机器之间相互移动的时间函数
+def find_route(points, start, end):
+    if start == end:
+        return [0,end]
+
+    route = []
+    index_start = points.index(start)
+    index_end = points.index(end)
+
+    if index_start < index_end:
+        route = points[index_start:index_end + 1]
+    else:
+        route = points[index_start:index_end - 1 if index_end != 0 else None:-1]
+    length = len(route) - 1
+    return [length,end]
+
+#最早开工函数
+def earliest_firing_start_time(jobs,non_sorted_A,num_machines): #关键问题就是取前一个变迁的最早开工时间，所以核心就是firing的最早开工时间
+    non_sorted_A_length = len(non_sorted_A)
+    time_list = [0] * non_sorted_A_length
+    points = list(range(num_machines+2))
+    for i in range(non_sorted_A_length):
+        if i == 0:
+            # 机器人的初始位置在站点0
+            start_point = 0
+            for job in jobs:
+                if non_sorted_A[i] in job[4]:
+                    tra_index = job[4].index(non_sorted_A[i])
+                    tra_machine = job[2][tra_index]
+                    end_point = tra_machine
+                    route = find_route(points, start_point, end_point)
+
+            time_list[i] = 0 + route[0] #1是机器人移动时间
+
+        else:
+            for job in jobs:
+                if non_sorted_A[i] in job[4]:
+                    tra_index = job[4].index(non_sorted_A[i])
+                    if tra_index == 0: #如果是第一个变迁，那么就是机器人移动到变迁所在的机器的时间，机器人需要返回到起始仓库进行取工件
+                        tra_machine = job[2][tra_index]
+                        start_point = route[1] #机器人停留在上一个变迁所在的机器
+                        end_point = 0 #返回到仓库操作
+                        route_first = find_route(points, start_point, end_point) #route_first是机器人返回到起始仓库的时间
+                        start_point = 0 #机器人从起始仓库出发
+                        end_point = tra_machine #机器人移动到变迁所在的机器
+                        route = find_route(points, start_point, end_point) #route是机器人移动到变迁所在的机器的时间
+                        time_list[i] = time_list[i - 1] + route[0] + route_first[0] #机器人移动到变迁所在的机器的时间+机器人返回到起始仓库的时间
+                    elif tra_index == len(job[4]) - 1: #如果是最后一个变迁，那么就是机器人移动到变迁所在的机器的时间，机器人需要返回到仓库进行取工件
+                        front_trs_index = tra_index - 1
+                        front_trs = job[4][front_trs_index] #front_trs是前一个变迁本身
+                        front_trs_process_time = job[3][front_trs_index][1] #front_trs_process_time是前一个变迁的加工时间
+                        tra_machine = job[2][tra_index-1]
+                        start_point = route[1] #机器人停留在上一个变迁所在的机器
+                        end_point = tra_machine
+                        route_last = find_route(points, start_point, end_point)
+                        start_point = tra_machine #机器人从变迁所在的机器出发
+                        end_point = points[-1]
+                        route = find_route(points, start_point, end_point) #route是机器人移动到仓库的时间
+                        if front_trs in non_sorted_A:
+                            front_trs_index = non_sorted_A.index(front_trs)
+                            time_list[i] = max(time_list[i - 1] + route_last[0] , time_list[front_trs_index]+front_trs_process_time)  + route[0] #1是机器人移动时间 这里存在问题
+
+                    else:
+                        front_trs_index = tra_index - 1
+                        front_trs = job[4][front_trs_index] #front_trs是前一个变迁本身
+                        front_trs_process_time = job[3][front_trs_index][1] #front_trs_process_time是前一个变迁的加工时间
+                        front_trs_machine = job[2][front_trs_index]
+                        tra_machine = job[2][tra_index]
+                        start_point = route[1] #机器人停留在上一个变迁所在的机器
+                        end_point = front_trs_machine
+                        route_middle = find_route(points, start_point, end_point)
+                        start_point = route_middle[1]#route_middle[1] #机器人从前一个变迁所在的机器出发
+                        end_point = tra_machine
+                        route = find_route(points, start_point, end_point) #route是机器人移动到变迁所在的机器的时间
+
+                        if front_trs in non_sorted_A:
+                            front_trs_index = non_sorted_A.index(front_trs)
+                            time_list[i] = max(time_list[i - 1] + route_middle[0], time_list[front_trs_index]+front_trs_process_time)  + route[0] #1是机器人移动时间
+    #print(time_list,'time_list')
+    return time_list
+#产生随机解函数
+def random_solution(jobs,num_jobs):
+    grop = []
+    for i in range(num_jobs):
+        grop = grop + jobs[i][4]
+    # 随机打乱顺序，为了生成随机解
+    #print("原始序", grop)#核心校准
+    random.shuffle(grop)
+    # print("随机产生未判断是否可行解",grop)
+    for job in jobs:
+        #lst_job = job[4]
+        tem = []  # 保存了索引信息
+        for i in grop:
+            if i in job[4]:
+                tem.append(grop.index(i))
+        sorted_A = partial_sort_by_index(grop, tem)
+    print("使用启发式一得到的调整的解：", sorted_A)
+    return sorted_A
+#产生变迁对的全排列函数
+def permutation_function(jobs,num_jobs,num_machines):
+    solution_list = []
+    grop = []
+    for i in range(num_jobs):
+        grop = grop + jobs[i][4]
+    permutations = list(itertools.permutations(grop))
+    for permutation in permutations:
+        per_mu = list(permutation)
+        print(per_mu)
+        for job in jobs:
+            # lst_job = job[4]
+            tem = []  # 保存了索引信息
+            for i in per_mu:
+                if i in job[4]:
+                    tem.append(per_mu.index(i))
+            sorted_A = partial_sort_by_index(per_mu, tem)
+        non_sorted_A = deadlock_recovery(sorted_A, jobs, num_machines)
+        processing_time = earliest_firing_start_time(jobs, non_sorted_A)
+        solution_list.append(processing_time[-1])
+        print(min(solution_list))
+
+
+
+
+# 随机生成工件数量和机器数量
+num_jobs = 10 #工件数量
+num_machines = 3 #机器数量
+# 随机生成每个工件在哪些机器上加工以及加工时间
+jobs = []
+
+#print(status_job,'status_job')
+for i in range(num_jobs):
+    # 随机生成工件在哪些机器上加工
+    machines = sorted(random.sample(range(1, num_machines + 1), random.randint(1, num_machines)))
+    # 随机生成工件在每个机器上的加工时间
+    processing_times = []
+    for machine in machines:
+        processing_times.append([machine, random.randint(1, 20)]) #加工时间范围控制
+    jobs.append([i+1,f'Job{i+1}', machines, processing_times])
+
+
+# 随机生成机器人初始位置
+robot_init_position = random.randint(1, num_machines)
+
+# 输出工件的加工信息
+
+
+# 输出机器人初始位置
+#print(f"Robot Initial Position: M{robot_init_position}")
+
+for i in range(num_jobs):
+    if i == 0:
+        job_Transition = []
+        num_M = len(jobs[i][2])
+        num_Transition = 2 * num_M + 2
+        for temp in range(1, num_Transition + 1):
+            job_Transition.append(temp)
+        jobs[i].append(job_Transition)
+    else:
+        job_Transition = []
+        num_M = len(jobs[i][2])
+        num_Transition = 2 * num_M + 2
+        for temp in range(jobs[i-1][4][-1]+1, jobs[i-1][4][-1]+1+num_Transition):
+            job_Transition.append(temp)
+        jobs[i].append(job_Transition)
+#print(jobs)
+for job in jobs: #输出所有工件自己的变迁代表
+    #print(job[4])
+    job[4] = [job[4][i:i+2] for i in range(0, len(job[4]), 2)] # 配对操作,将变迁代表分成两个一组
+    #print(job[4])
+print(jobs) #核心校准
+
+
+# #临时使用
+# jobs = [[1, 'Job1', [1, 3, 1], [[1, 2], [3, 3],[1, 4]], [[1, 2], [3, 4], [5, 6], [7, 8]]],
+#         [2, 'Job2', [1, 2, 3], [[1, 3],[2, 4],[3, 5]], [[9, 10], [11, 12], [13, 14], [15, 16]]],
+#         [3, 'Job3', [3, 2, 1], [[3, 2], [2, 3],[1, 4]], [[17, 18], [19, 20], [21, 22], [23, 24]]],
+#         [4, 'Job4', [1, 2, 3], [[1, 14],[2, 14],[3, 10]],[[25, 26], [27, 28], [29, 30], [31, 32]]],
+#         [5, 'Job5', [3, 1, 2], [[3, 12],[1, 7],[2, 13]], [[33, 34], [35, 36], [37, 38], [39, 40]]]]
+# jobs = [[1,'job1',[1,2,3,2,3],[[1,3],[2,4],[3,4],[2,4],[3,3]],[[1, 2], [3, 4], [5, 6],[7, 8], [9, 10], [11, 12]]],
+#         [2,'job2',[1,2,1,3,1],[[1,7],[2,3],[1,3],[3,3],[1,4]],[[13, 14], [15, 16], [17, 18],[19, 20],[21, 22],[23,24]]]]
+jobs = [[1, 'Job1', [1, 3, 1], [[1, 2], [3, 3],[1, 4]], [[1, 2], [3, 4], [5, 6], [7, 8]]],
+        [2, 'Job2', [1, 2, 3], [[1, 3], [2, 4],[3, 5]], [[9, 10], [11, 12], [13, 14], [15, 16]]],
+        [3, 'Job3', [3, 2, 1], [[3, 2], [2, 4],[1, 3]], [[17, 18], [19, 20], [21, 22], [23, 24]]]]
+jobs = [[1, 'Job1', [4, 2, 3, 2, 3], [[4, 1], [2, 1], [3, 1], [2, 10], [3, 6]], [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]]],
+        [2, 'Job2', [4, 3, 4, 1, 4], [[4, 9], [3, 4], [4, 5], [1, 6], [4, 2]], [[13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24]]],
+        [3, 'Job3', [1, 4, 3, 1, 3], [[1, 2], [4, 7], [3, 2], [1, 5], [3, 5]], [[25, 26], [27, 28], [29, 30], [31, 32], [33, 34], [35, 36]]],
+        [4, 'Job4', [4, 1, 4, 2, 3], [[4, 7], [1, 8], [4, 5], [2, 10], [3, 3]], [[37, 38], [39, 40], [41, 42], [43, 44], [45, 46], [47, 48]]],
+        [5, 'Job5', [4, 1, 4, 1, 3], [[4, 3], [1, 2], [4, 2], [1, 9], [3, 2]], [[49, 50], [51, 52], [53, 54], [55, 56], [57, 58], [59, 60]]],
+        [6, 'Job6', [4, 1, 3, 1, 2], [[4, 4], [1, 9], [3, 3], [1, 3], [2, 5]], [[61, 62], [63, 64], [65, 66], [67, 68], [69, 70], [71, 72]]]]
+# jobs = [[1, 'Job1', [2, 1, 3, 1, 4, 2, 4, 1, 4, 2, 1, 4, 2, 4, 1, 4, 1, 3, 1, 4, 3, 2, 4, 2, 4, 3, 1, 2, 1, 4, 2, 1, 3, 4, 2, 4, 2, 3, 2, 4, 1, 4, 2, 1, 2, 3, 2, 1, 4, 1], [[2, 1], [1, 5], [3, 9], [1, 5], [4, 8], [2, 3], [4, 6], [1, 10], [4, 6], [2, 3], [1, 7], [4, 2], [2, 7], [4, 4], [1, 8], [4, 4], [1, 7], [3, 7], [1, 10], [4, 9], [3, 3], [2, 1], [4, 5], [2, 8], [4, 7], [3, 2], [1, 8], [2, 9], [1, 3], [4, 7], [2, 3], [1, 4], [3, 8], [4, 1], [2, 5], [4, 7], [2, 4], [3, 8], [2, 8], [4, 7], [1, 10], [4, 3], [2, 5], [1, 1], [2, 2], [3, 1], [2, 2], [1, 1], [4, 10], [1, 4]], [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32], [33, 34], [35, 36], [37, 38], [39, 40], [41, 42], [43, 44], [45, 46], [47, 48], [49, 50], [51, 52], [53, 54], [55, 56], [57, 58], [59, 60], [61, 62], [63, 64], [65, 66], [67, 68], [69, 70], [71, 72], [73, 74], [75, 76], [77, 78], [79, 80], [81, 82], [83, 84], [85, 86], [87, 88], [89, 90], [91, 92], [93, 94], [95, 96], [97, 98], [99, 100], [101, 102]]],
+#         [2, 'Job2', [4, 3, 2, 4, 1, 3, 4, 1, 4, 2, 3, 1, 3, 2, 3, 4, 1, 4, 1, 3, 4, 2, 3, 4, 1, 3, 2, 3, 4, 1, 4, 1, 4, 1, 4, 3, 2, 3, 2, 1, 2, 1, 2, 3, 1, 2, 3, 1, 3, 2], [[4, 2], [3, 5], [2, 9], [4, 2], [1, 2], [3, 2], [4, 3], [1, 7], [4, 8], [2, 3], [3, 3], [1, 10], [3, 6], [2, 10], [3, 8], [4, 6], [1, 1], [4, 2], [1, 4], [3, 4], [4, 10], [2, 10], [3, 1], [4, 7], [1, 1], [3, 5], [2, 6], [3, 9], [4, 7], [1, 8], [4, 5], [1, 9], [4, 5], [1, 8], [4, 9], [3, 2], [2, 3], [3, 1], [2, 6], [1, 7], [2, 5], [1, 3], [2, 2], [3, 7], [1, 5], [2, 9], [3, 5], [1, 8], [3, 9], [2, 5]], [[103, 104], [105, 106], [107, 108], [109, 110], [111, 112], [113, 114], [115, 116], [117, 118], [119, 120], [121, 122], [123, 124], [125, 126], [127, 128], [129, 130], [131, 132], [133, 134], [135, 136], [137, 138], [139, 140], [141, 142], [143, 144], [145, 146], [147, 148], [149, 150], [151, 152], [153, 154], [155, 156], [157, 158], [159, 160], [161, 162], [163, 164], [165, 166], [167, 168], [169, 170], [171, 172], [173, 174], [175, 176], [177, 178], [179, 180], [181, 182], [183, 184], [185, 186], [187, 188], [189, 190], [191, 192], [193, 194], [195, 196], [197, 198], [199, 200], [201, 202], [203, 204]]]]
+jobs = [[1, 'Job1', [3, 1, 3, 2, 3], [[3, 8], [1, 3], [3, 6], [2, 7], [3, 3]], [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]]],
+        [2, 'Job2', [1, 2, 1, 2, 1], [[1, 5], [2, 5], [1, 7], [2, 7], [1, 8]], [[13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24]]],
+        [3, 'Job3', [2, 1, 3, 2, 3], [[2, 2], [1, 7], [3, 3], [2, 5], [3, 7]], [[25, 26], [27, 28], [29, 30], [31, 32], [33, 34], [35, 36]]],
+        [4, 'Job4', [2, 3, 1, 2, 3], [[2, 7], [3, 10], [1, 6], [2, 1], [3, 1]], [[37, 38], [39, 40], [41, 42], [43, 44], [45, 46], [47, 48]]],
+        [5, 'Job5', [1, 3, 2, 3, 1], [[1, 1], [3, 6], [2, 9], [3, 8], [1, 6]], [[49, 50], [51, 52], [53, 54], [55, 56], [57, 58], [59, 60]]],
+        [6, 'Job6', [3, 1, 3, 1, 2], [[3, 4], [1, 4], [3, 4], [1, 2], [2, 4]], [[61, 62], [63, 64], [65, 66], [67, 68], [69, 70], [71, 72]]],
+        [7, 'Job7', [1, 3, 1, 2, 3], [[1, 10], [3, 3], [1, 2], [2, 5], [3, 7]], [[73, 74], [75, 76], [77, 78], [79, 80], [81, 82], [83, 84]]],
+        [8, 'Job8', [2, 1, 3, 2, 1], [[2, 6], [1, 5], [3, 5], [2, 1], [1, 2]], [[85, 86], [87, 88], [89, 90], [91, 92], [93, 94], [95, 96]]],
+        [9, 'Job9', [2, 3, 2, 1, 2], [[2, 7], [3, 1], [2, 5], [1, 5], [2, 4]], [[97, 98], [99, 100], [101, 102], [103, 104], [105, 106], [107, 108]]],
+        [10, 'Job10', [1, 3, 2, 3, 2], [[1, 1], [3, 2], [2, 2], [3, 9], [2, 5]], [[109, 110], [111, 112], [113, 114], [115, 116], [117, 118], [119, 120]]],
+        [11, 'Job11', [1, 2, 1, 3, 1], [[1, 3], [2, 5], [1, 4], [3, 1], [1, 10]], [[121, 122], [123, 124], [125, 126], [127, 128], [129, 130], [131, 132]]],
+        [12, 'Job12', [2, 1, 2, 1, 3], [[2, 6], [1, 9], [2, 1], [1, 5], [3, 4]], [[133, 134], [135, 136], [137, 138], [139, 140], [141, 142], [143, 144]]],
+        [13, 'Job13', [1, 2, 1, 2, 1], [[1, 1], [2, 5], [1, 6], [2, 1], [1, 5]], [[145, 146], [147, 148], [149, 150], [151, 152], [153, 154], [155, 156]]],
+        [14, 'Job14', [2, 1, 3, 1, 3], [[2, 9], [1, 7], [3, 9], [1, 6], [3, 7]], [[157, 158], [159, 160], [161, 162], [163, 164], [165, 166], [167, 168]]],
+        [15, 'Job15', [1, 2, 3, 2, 1], [[1, 7], [2, 5], [3, 1], [2, 8], [1, 2]], [[169, 170], [171, 172], [173, 174], [175, 176], [177, 178], [179, 180]]],
+        [16, 'Job16', [2, 1, 2, 1, 3], [[2, 3], [1, 3], [2, 9], [1, 2], [3, 8]], [[181, 182], [183, 184], [185, 186], [187, 188], [189, 190], [191, 192]]],
+        [17, 'Job17', [2, 1, 3, 1, 3], [[2, 1], [1, 4], [3, 6], [1, 7], [3, 5]], [[193, 194], [195, 196], [197, 198], [199, 200], [201, 202], [203, 204]]],
+        [18, 'Job18', [2, 3, 1, 2, 3], [[2, 1], [3, 9], [1, 7], [2, 5], [3, 7]], [[205, 206], [207, 208], [209, 210], [211, 212], [213, 214], [215, 216]]],
+        [19, 'Job19', [1, 2, 1, 2, 3], [[1, 8], [2, 9], [1, 4], [2, 2], [3, 6]], [[217, 218], [219, 220], [221, 222], [223, 224], [225, 226], [227, 228]]],
+        [20, 'Job20', [1, 3, 2, 1, 2], [[1, 2], [3, 9], [2, 2], [1, 7], [2, 10]], [[229, 230], [231, 232], [233, 234], [235, 236], [237, 238], [239, 240]]]]
+
+jobs = [[1, 'Job1', [3, 1, 3, 2, 1], [[3, 5], [1, 9], [3, 8], [2, 8], [1, 7]], [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]]],
+        [2, 'Job2', [3, 1, 3, 1, 2], [[3, 4], [1, 4], [3, 6], [1, 4], [2, 7]], [[13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24]]],
+        [3, 'Job3', [1, 2, 3, 1, 3], [[1, 10], [2, 10], [3, 5], [1, 4], [3, 4]], [[25, 26], [27, 28], [29, 30], [31, 32], [33, 34], [35, 36]]],
+        [4, 'Job4', [2, 1, 2, 3, 2], [[2, 5], [1, 5], [2, 2], [3, 6], [2, 2]], [[37, 38], [39, 40], [41, 42], [43, 44], [45, 46], [47, 48]]]]
+
+jobs = [[1, 'Job1', [3, 1, 2, 3, 2], [[3, 10], [1, 9], [2, 8], [3, 10], [2, 3]], [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]]], [2, 'Job2', [1, 3, 2, 1, 3], [[1, 2], [3, 1], [2, 6], [1, 5], [3, 10]], [[13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24]]], [3, 'Job3', [2, 3, 2, 1, 3], [[2, 10], [3, 9], [2, 9], [1, 10], [3, 8]], [[25, 26], [27, 28], [29, 30], [31, 32], [33, 34], [35, 36]]], [4, 'Job4', [2, 3, 1, 3, 1], [[2, 9], [3, 7], [1, 6], [3, 9], [1, 6]], [[37, 38], [39, 40], [41, 42], [43, 44], [45, 46], [47, 48]]], [5, 'Job5', [2, 3, 1, 3, 2], [[2, 3], [3, 10], [1, 9], [3, 5], [2, 8]], [[49, 50], [51, 52], [53, 54], [55, 56], [57, 58], [59, 60]]], [6, 'Job6', [3, 1, 3, 2, 3], [[3, 2], [1, 4], [3, 1], [2, 8], [3, 6]], [[61, 62], [63, 64], [65, 66], [67, 68], [69, 70], [71, 72]]], [7, 'Job7', [1, 3, 1, 3, 2], [[1, 4], [3, 10], [1, 8], [3, 7], [2, 8]], [[73, 74], [75, 76], [77, 78], [79, 80], [81, 82], [83, 84]]], [8, 'Job8', [1, 3, 1, 2, 3], [[1, 3], [3, 7], [1, 5], [2, 6], [3, 8]], [[85, 86], [87, 88], [89, 90], [91, 92], [93, 94], [95, 96]]], [9, 'Job9', [1, 2, 1, 3, 2], [[1, 9], [2, 8], [1, 8], [3, 9], [2, 10]], [[97, 98], [99, 100], [101, 102], [103, 104], [105, 106], [107, 108]]]]
+
+
+
+# jobs = [
+#     [['M3', 82], ['M1', 89], ['M3', 100], ['M2', 109], ['M1', 118]],
+#     [['M3', 31], ['M1', 41], ['M3', 47], ['M1', 55], ['M2', 60]],
+#     [['M1', 17], ['M2', 38], ['M3', 57], ['M1', 64], ['M3', 70]],
+#     [['M2', 2], ['M1', 8], ['M2', 14], ['M3', 19], ['M2', 26]],
+# ]
+#
+# time_lists = [
+#     [82, 89, 100, 109, 118],
+#     [31, 41, 47, 55, 60],
+#     [17, 38, 57, 64, 70],
+#     [2, 8, 14, 19, 26],
+# ]
+
+
+num_jobs = 9
+num_machines = 3
+sorted_A = random_solution(jobs,num_jobs)
+print(sorted_A,'sorted_A')
+flag = 1
+sorted_A_len = len(sorted_A)
+length = 1
+while flag == 1:
+    status_job = [-1] * (num_jobs)  # 工件的完工状态,工件加工到哪个工序了有所记录
+    sorted_A_temp = sorted_A.copy()
+
+    non_sorted_A_part = deadlock_recovery(sorted_A_temp, jobs, num_machines, status_job, length)
+    print(non_sorted_A_part[1],'non_sorted_A[1]')
+    print(length, 'length')
+    #input('dscdshi')
+    if non_sorted_A_part[1] == 0:
+        flag = 0
+    else:length = length + 1
+non_sorted_A = non_sorted_A_part[0]
+print(non_sorted_A,'non_sorted_A')
+# input('csadchsd')
+# status_job = [-1] * (num_jobs) #工件的完工状态,工件加工到哪个工序了有所记录
+# length = 1
+#
+# non_sorted_A = deadlock_recovery(sorted_A,jobs,num_machines,status_job,length)
+# print(non_sorted_A,'non_sorted_A')
+# print(sorted_A,num_machines,status_job,length,'sorted_A,jobs,num_machines,status_job,length')
+#
+# print('*****************')
+#non_sorted_A = [[37, 38], [39, 40], [13, 14], [41, 42], [15, 16], [43, 44], [45, 46], [17, 18], [25, 26], [47, 48], [27, 28], [19, 20], [29, 30], [21, 22], [31, 32], [33, 34], [23, 24], [35, 36],[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]]
+time_list = earliest_firing_start_time(jobs,non_sorted_A,num_machines)
+print(time_list,'time_list')
+input()
+
+qunity = []
+length_non = []
+for i in range(200):#随机产生了10个解
+    # grop = []
+    # for i in range(num_jobs):
+    #     grop = grop + jobs[i][4]
+    # # 随机打乱顺序，为了生成随机解
+    # #print("原始序", grop)#核心校准
+    # random.shuffle(grop)
+    # #print("随机产生未判断是否可行解",grop)
+    # for job in jobs:
+    #     lst_job = job[4]
+    #     tem = [] #保存了索引信息
+    #     for i in grop:
+    #         if i in job[4]:
+    #             tem.append(grop.index(i))
+    #     sorted_A = partial_sort_by_index(grop, tem)
+    # print("使用启发式一得到的调整的解：", sorted_A)
+    status_job = [-1] * (num_jobs)
+    sorted_A = random_solution(jobs,num_jobs)
+    temp_sorted_A = sorted_A.copy()
+    non_sorted_A = deadlock_recovery(sorted_A,jobs,num_machines,status_job,length)
+    print(non_sorted_A, 'non_sorted_A')  # 非死锁序列# 核心校准
+    length_non.append(len(non_sorted_A))
+    processing_time = earliest_firing_start_time(jobs, non_sorted_A,num_machines)
+    print(processing_time, 'processing_time')  # 核心校准
+    print(processing_time[-1], 'processing_time[-1]')  # 核心校准
+    qunity.append(processing_time[-1])
+    print(qunity, 'processing_time')
+    print(len(qunity),min(qunity), 'min','length')
+    print('******************************************************************************************')
+print(length_non)
+end_time = time.time()
+execution_time = end_time - start_time
+print("程序执行时间：", execution_time, "秒")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
